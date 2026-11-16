@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { addDays, bonusDay, bounty, diffDays, dueLabel, parseYmd, ymd } from '../logic'
+import { addDays, bonusDay, bounty, diffDays, dueLabel, parseYmd, urgency, ymd } from '../logic'
 import { completeTask, deleteTask, setHoliday, skipTask, toggleThanks, uncompleteTask } from '../store'
 import type { Member, State, Task } from '../types'
 import { Avatar, Empty, Section, tint } from '../ui'
@@ -138,10 +138,9 @@ function TaskCard({ task: t, state, me, today, onDone }: Props & { task: Task })
   const [open, setOpen] = useState(false)
   const who = state.members.find((m) => m.id === t.assigneeId)
   const bonus = bounty(t, bonusDay(state.household, today))
-  const late = t.due < today
 
   return (
-    <div className={late ? 'task late' : 'task'}>
+    <div className={`task u-${urgency(t.due, today)}`}>
       <div className="task-row">
         <button
           className="tick"

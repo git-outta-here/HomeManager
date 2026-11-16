@@ -40,6 +40,17 @@ export function dueLabel(due: string, today: string) {
   })
 }
 
+export type Urgency = 'verylate' | 'late' | 'today' | 'soon' | 'later'
+
+/** How pressing a due date is, which decides the colour a task is shown in. */
+export function urgency(due: string, today: string): Urgency {
+  const d = diffDays(due, today)
+  if (d <= -3) return 'verylate'
+  if (d < 0) return 'late'
+  if (d === 0) return 'today'
+  return d === 1 ? 'soon' : 'later'
+}
+
 export function repeatLabel(r: Repeat) {
   if (r.kind === 'interval')
     return r.everyDays === 1 ? 'The day after it is done' : `${r.everyDays} days after it is done`

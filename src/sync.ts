@@ -38,6 +38,10 @@ let link = read<Link>(LINK_KEY)
 let base: Base = read<Base>(BASE_KEY) ?? {}
 let channel: RealtimeChannel | null = null
 
+/** For reminders, which store this phone's notification address next to the household. */
+export const syncClient = () => sb
+export const linkedHousehold = () => link?.id ?? null
+
 // ---- status, for the settings screen ----
 
 /** off: not configured. unlinked: configured but this device has no household yet. */

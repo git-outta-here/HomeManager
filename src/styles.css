@@ -7,6 +7,7 @@
   --soft: #f1ece3;
   --danger: #c0392b;
   --gold: #b7791f;
+  --ok: #2f8f5f;
   --c: #f2684a;
   --radius: 18px;
   --shadow: 0 1px 2px rgb(31 36 48 / 0.05), 0 6px 20px rgb(31 36 48 / 0.05);
@@ -23,6 +24,7 @@
     --soft: #2a2e36;
     --danger: #ff8a7a;
     --gold: #f5b841;
+    --ok: #5fcf96;
     --shadow: none;
   }
 }
@@ -220,17 +222,32 @@ h1 {
   box-shadow: var(--shadow);
   margin-bottom: 10px;
   overflow: hidden;
+  border-left: 5px solid transparent;
 }
 
-.task.late {
-  box-shadow: var(--shadow), inset 4px 0 0 var(--gold);
+/* Urgency: red when overdue (deeper after three days), amber today, green tomorrow. */
+.task.u-verylate {
+  border-left-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 9%, var(--card));
+}
+
+.task.u-late {
+  border-left-color: var(--danger);
+}
+
+.task.u-today {
+  border-left-color: var(--gold);
+}
+
+.task.u-soon {
+  border-left-color: var(--ok);
 }
 
 .task-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px 12px 12px;
+  padding: 12px 14px 12px 7px;
 }
 
 .tick {
@@ -297,7 +314,13 @@ h1 {
   white-space: nowrap;
 }
 
-.task.late .task-meta {
+.task.u-verylate .task-meta,
+.task.u-late .task-meta {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.task.u-today .task-meta {
   color: var(--gold);
 }
 
@@ -970,4 +993,33 @@ fieldset {
 .form .chips input.chip-input.on {
   border-color: var(--c);
   background: color-mix(in srgb, var(--c) 14%, var(--card));
+}
+
+/* ---------- urgency dots, reminders ---------- */
+
+.dot.u-verylate,
+.dot.u-late {
+  background: var(--danger);
+}
+
+.dot.u-today {
+  background: var(--gold);
+}
+
+.dot.u-soon {
+  background: var(--ok);
+}
+
+.dot.u-later {
+  background: var(--line);
+}
+
+.form select {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--bg);
+  font: inherit;
+  color: inherit;
 }

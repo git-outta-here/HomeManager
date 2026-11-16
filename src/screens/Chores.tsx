@@ -1,8 +1,16 @@
 import { useState } from 'react'
-import { onTimeStreak, repeatLabel } from '../logic'
+import { dueLabel, onTimeStreak, repeatLabel, urgency } from '../logic'
+import {
+  disableReminders,
+  enableReminders,
+  reminderAvailability,
+  sendTestReminder,
+  updateReminder,
+  useReminderHour,
+} from '../reminders'
 import { resetAll, setHoliday, uncompleteTask, updateHousehold } from '../store'
 import { createHousehold, disconnect, retrySync, useSync, type SyncStatus } from '../sync'
-import type { Chore, State } from '../types'
+import type { Chore, Member, State } from '../types'
 import { Avatar, Empty, Section } from '../ui'
 
 const SYNC_TEXT: Record<SyncStatus, string> = {
@@ -13,7 +21,7 @@ const SYNC_TEXT: Record<SyncStatus, string> = {
   offline: 'Offline. Changes are saved here and will be sent when you reconnect.',
 }
 
-export default function Chores({ state, onEdit }: { state: State; onEdit: (c: Chore) => void }) {
+export default function Chores({ state, me, today, onEdit }: { state: State; me: Member; today: string; onEdit: (c: Chore) => void }) {
   const [confirmReset, setConfirmReset] = useState(false)
   const sync = useSync()
   const linked = !!sync.code
@@ -38,12 +46,17 @@ export default function Chores({ state, onEdit }: { state: State; onEdit: (c: Ch
           <div className="card list">
             {[...state.chores].sort((a, b) => a.title.localeCompare(b.title)).map((c) => {
               const streak = onTimeStreak(state.tasks, c.id)
+              const next = state.tasks.find((t) => t.choreId === c.id && !t.completedAt)
+              const resting = c.paused || !!state.household.pausedSince || !next
               return (
                 <button className="list-row" key={c.id} onClick={() => onEdit(c)}>
                   <span className="task-icon">{c.icon}</span>
                   <span className="task-text">
                     <span className="task-title">{c.title}</span>
                     <span className="task-meta">
+                      {!resting && (
+                        <span className={`dot u-${urgency(next.due, today)}`} title={dueLabel(next.due, today)} />
+                      )}
                       {c.paused ? '⏸ Paused' : repeatLabel(c.repeat)} · {whoLabel(c)}
                       {!c.paused && streak > 1 && ` · 🔥 ${streak} on time`}
                     </span>
@@ -138,6 +151,7 @@ export default function Chores({ state, onEdit }: { state: State; onEdit: (c: Ch
               <button
                 className="ghost danger"
                 onClick={() => {
+                  void disableReminders()
                   disconnect()
                   resetAll()
                 }}
@@ -152,6 +166,8 @@ export default function Chores({ state, onEdit }: { state: State; onEdit: (c: Ch
           )}
         </div>
       </Section>
+
+      {linked && <Reminders me={me} />}
 
       {sync.status !== 'off' && (
         <Section title="Sync">
@@ -179,5 +195,81 @@ export default function Chores({ state, onEdit }: { state: State; onEdit: (c: Ch
         </Section>
       )}
     </>
+  )
+}
+
+const HOURS = Array.from({ length: 24 }, (_, h) => h)
+const hourLabel = (h: number) => new Date(2000, 0, 1, h).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+
+const UNAVAILABLE = {
+  nosync: '',
+  install:
+    'To get reminders on an iPhone, add HomeManager to your Home Screen (Share, then Add to Home Screen) and open it from there.',
+  unsupported: 'This browser cannot show reminders.',
+  blocked: 'Notifications are blocked for HomeManager. Allow them in your phone settings to use reminders.',
+}
+
+/** A daily notification on this phone, sent only on days when its owner has something due. */
+function Reminders({ me }: { me: Member }) {
+  const hour = useReminderHour()
+  const [pick, setPick] = useState(hour ?? 18)
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
+  const available = reminderAvailability()
+
+  const run = (job: () => Promise<unknown>, done = '') => {
+    setBusy(true)
+    setNote('')
+    job()
+      .then(() => setNote(done))
+      .catch((e: Error) => setNote(e.message))
+      .finally(() => setBusy(false))
+  }
+
+  return (
+    <Section title="Reminders">
+      <div className="card form">
+        {available !== 'ok' && hour === null ? (
+          <p className="plain">{UNAVAILABLE[available as keyof typeof UNAVAILABLE]}</p>
+        ) : (
+          <>
+            <label>
+              Remind {me.name} on this phone at
+              <select
+                value={hour ?? pick}
+                disabled={busy}
+                onChange={(e) => {
+                  const h = Number(e.target.value)
+                  setPick(h)
+                  if (hour !== null) run(() => updateReminder({ hour: h }))
+                }}
+              >
+                {HOURS.map((h) => (
+                  <option key={h} value={h}>
+                    {hourLabel(h)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="note">Sent only on days when you have something due or overdue, and never in holiday mode.</p>
+            {hour === null ? (
+              <button className="primary small" disabled={busy} onClick={() => run(() => enableReminders(pick, me.id))}>
+                Turn on reminders
+              </button>
+            ) : (
+              <div className="row">
+                <button className="ghost" disabled={busy} onClick={() => run(sendTestReminder, 'Test sent. It should arrive within a few seconds.')}>
+                  Send a test
+                </button>
+                <button className="ghost danger" disabled={busy} onClick={() => run(disableReminders)}>
+                  Turn off
+                </button>
+              </div>
+            )}
+          </>
+        )}
+        {note && <p className="note">{note}</p>}
+      </div>
+    </Section>
   )
 }
