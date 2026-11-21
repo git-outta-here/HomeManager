@@ -15,6 +15,9 @@ create table if not exists public.push_subscriptions (
   created_at timestamptz not null default now()
 );
 
+-- Whether this phone also wants a notification when the other person finishes something.
+alter table public.push_subscriptions add column if not exists done_alerts boolean not null default false;
+
 alter table public.push_subscriptions enable row level security;
 
 drop policy if exists "phones manage their own reminders" on public.push_subscriptions;

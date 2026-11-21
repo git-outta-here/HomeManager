@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react'
 import { linkedHousehold, syncClient } from './sync'
 
 const KEY = 'homemanager.reminder'
-type Saved = { hour: number; endpoint: string; memberId: string }
+type Saved = { hour: number; endpoint: string; memberId: string; doneAlerts?: boolean }
 
 /** ok: can be switched on. install: iPhone needs the Home Screen app. blocked: notifications denied. */
 export type ReminderAvailability = 'ok' | 'nosync' | 'install' | 'unsupported' | 'blocked'
@@ -40,6 +40,41 @@ export const useReminderHour = () =>
     },
     () => saved?.hour ?? null,
   )
+
+/** Whether this phone is also told when the other person finishes something. */
+export const useDoneAlerts = () =>
+  useSyncExternalStore(
+    (w) => {
+      watchers.add(w)
+      return () => watchers.delete(w)
+    },
+    () => !!saved?.doneAlerts,
+  )
+
+export async function setDoneAlerts(on: boolean) {
+  if (!saved) return
+  const { error } = await syncClient()!.from('push_subscriptions').update({ done_alerts: on }).eq('endpoint', saved.endpoint)
+  if (error) throw new Error('Could not save that. Try again in a moment.')
+  save({ ...saved, doneAlerts: on || undefined })
+}
+
+/** True when this device is linked to a household, so the other phone can be notified. */
+export const canNotify = () => !!syncClient() && !!linkedHousehold()
+
+/**
+ * Sends the other person a notification about a task: a nudge to do it, or word that it is done.
+ * Resolves to how many phones it reached (0 when they have not switched reminders on).
+ */
+export async function notifyPartner(kind: 'nudge' | 'done', taskId: string, fromMemberId: string) {
+  const sb = syncClient()
+  const household = linkedHousehold()
+  if (!sb || !household) return 0
+  const { data, error } = await sb.functions.invoke('reminders', {
+    body: { notify: { household, from: fromMemberId, kind, task: taskId } },
+  })
+  if (error) throw new Error('Could not send that. Check your connection and try again.')
+  return (data?.sent as number) ?? 0
+}
 
 export function reminderAvailability(): ReminderAvailability {
   if (!syncClient() || !linkedHousehold()) return 'nosync'
@@ -82,6 +117,7 @@ export async function enableReminders(hour: number, memberId: string) {
     hour,
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
     last_sent: null,
+    done_alerts: false,
   })
   if (error) throw new Error(SERVER_NOT_READY)
   save({ hour, endpoint: sub.endpoint, memberId })

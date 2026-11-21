@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { addDays, bonusDay, bounty, diffDays, dueLabel, parseYmd, urgency, ymd } from '../logic'
+import { canNotify, notifyPartner } from '../reminders'
 import { completeTask, setHoliday, skipTask, toggleStep, toggleThanks, uncompleteTask } from '../store'
 import type { Member, State, Task } from '../types'
 import { Avatar, Empty, Section, tint } from '../ui'
@@ -140,6 +141,15 @@ function TaskCard({ task: t, state, me, today, onDone, onEdit }: Props & { task:
   const who = state.members.find((m) => m.id === t.assigneeId)
   const bonus = bounty(t, bonusDay(state.household, today))
   const steps = t.steps ?? []
+  const partner = state.members.find((m) => m.id !== me.id)
+  const nudgeable = !!partner && canNotify() && t.assigneeId !== me.id
+  const [nudge, setNudge] = useState('')
+  const sendNudge = () => {
+    setNudge('Sending…')
+    notifyPartner('nudge', t.id, me.id)
+      .then((sent) => setNudge(sent ? `${partner!.name} has been nudged.` : `${partner!.name} does not have reminders switched on yet.`))
+      .catch((e: Error) => setNudge(e.message))
+  }
   const ticked = steps.filter((x) => x.done).length
 
   return (
@@ -149,7 +159,11 @@ function TaskCard({ task: t, state, me, today, onDone, onEdit }: Props & { task:
           className="tick"
           style={tint(me)}
           aria-label={`Mark ${t.title} done`}
-          onClick={() => onDone(completeTask(t.id, me.id))}
+          onClick={() => {
+            onDone(completeTask(t.id, me.id))
+            // Tells the other phone, if its owner asked to hear about finished tasks.
+            void notifyPartner('done', t.id, me.id).catch(() => {})
+          }}
         />
         <button className="task-body" onClick={() => setOpen(!open)} aria-expanded={open}>
           <span className="task-icon">{t.icon}</span>
@@ -182,11 +196,17 @@ function TaskCard({ task: t, state, me, today, onDone, onEdit }: Props & { task:
               ))}
             </div>
           )}
+          {nudge && <p className="task-note">{nudge}</p>}
           <div className="task-actions">
             {bonus > 0 && (
               <span className="note">
                 {t.points} points + {bonus} overdue bonus
               </span>
+            )}
+            {nudgeable && (
+              <button className="ghost" disabled={nudge === 'Sending…'} onClick={sendNudge}>
+                👋 Nudge {partner!.name}
+              </button>
             )}
             {t.choreId ? (
               <button className="ghost" onClick={() => skipTask(t.id)}>

@@ -5,7 +5,9 @@ import {
   enableReminders,
   reminderAvailability,
   sendTestReminder,
+  setDoneAlerts,
   updateReminder,
+  useDoneAlerts,
   useReminderHour,
 } from '../reminders'
 import { resetAll, setHoliday, uncompleteTask, updateHousehold } from '../store'
@@ -168,7 +170,7 @@ export default function Chores({ state, me, today, onEdit }: { state: State; me:
         </div>
       </Section>
 
-      {linked && <Reminders me={me} />}
+      {linked && <Reminders me={me} partner={state.members.find((m) => m.id !== me.id)} />}
 
       {sync.status !== 'off' && (
         <Section title="Sync">
@@ -211,8 +213,9 @@ const UNAVAILABLE = {
 }
 
 /** A daily notification on this phone, sent only on days when its owner has something due. */
-function Reminders({ me }: { me: Member }) {
+function Reminders({ me, partner }: { me: Member; partner?: Member }) {
   const hour = useReminderHour()
+  const doneAlerts = useDoneAlerts()
   const [pick, setPick] = useState(hour ?? 18)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
@@ -253,6 +256,20 @@ function Reminders({ me }: { me: Member }) {
               </select>
             </label>
             <p className="note">Sent only on days when you have something due or overdue, and never in holiday mode.</p>
+            {hour !== null && partner && (
+              <>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={doneAlerts}
+                    disabled={busy}
+                    onChange={(e) => run(() => setDoneAlerts(e.target.checked))}
+                  />
+                  Also tell me when {partner.name} finishes something
+                </label>
+                <p className="note">Nudges from {partner.name} always come through while reminders are on.</p>
+              </>
+            )}
             {hour === null ? (
               <button className="primary small" disabled={busy} onClick={() => run(() => enableReminders(pick, me.id))}>
                 Turn on reminders

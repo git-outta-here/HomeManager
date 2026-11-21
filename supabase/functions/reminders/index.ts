@@ -2,6 +2,8 @@
 //   GET            returns the public key a phone needs to register for notifications
 //   POST {}        sends today's reminder to every phone whose chosen hour it now is
 //   POST {test}    sends a test notification to one phone straight away
+//   POST {notify}  a signed-in household member nudges their partner about a task, or tells them
+//                  one is done: { household, from (member id), kind: 'nudge' | 'done', task (id) }
 // It needs no secrets of its own: the signing keys are created on first use and kept in the
 // push_config table, which only this function can read.
 import { createClient } from 'npm:@supabase/supabase-js@2'
@@ -67,6 +69,44 @@ Deno.serve(async (req) => {
       if (!sub) return json({ error: 'Unknown phone' }, 404)
       const ok = await send(sub, { title: 'HomeManager', body: 'Reminders are working on this phone.' }, keys)
       return json({ sent: ok ? 1 : 0 }, ok ? 200 : 502)
+    }
+
+    if (body.notify) {
+      const { household, from, kind, task } = body.notify as Record<string, string>
+      if (!household || !from || !task || (kind !== 'nudge' && kind !== 'done')) return json({ error: 'Bad request' }, 400)
+      // Only someone signed in on a phone that belongs to this household may notify it.
+      const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer /, '')
+      const { data: who } = await db.auth.getUser(token)
+      if (!who?.user) return json({ error: 'Not signed in' }, 401)
+      const { data: member } = await db
+        .from('household_members')
+        .select('user_id')
+        .eq('household_id', household)
+        .eq('user_id', who.user.id)
+        .maybeSingle()
+      if (!member) return json({ error: 'Not in this household' }, 403)
+
+      const { data: rows } = await db
+        .from('items')
+        .select('id, data')
+        .eq('household_id', household)
+        .eq('deleted', false)
+        .in('id', [from, task])
+      const name = (rows?.find((r) => r.id === from)?.data as { name?: string } | undefined)?.name
+      const t = rows?.find((r) => r.id === task)?.data as { title?: string; icon?: string } | undefined
+      if (!name || !t?.title) return json({ error: 'Unknown task' }, 404)
+
+      let query = db.from('push_subscriptions').select('*').eq('household_id', household).neq('member_id', from)
+      if (kind === 'done') query = query.eq('done_alerts', true)
+      const { data: targets, error: e } = await query
+      if (e) throw e
+      const message =
+        kind === 'nudge'
+          ? { title: `👋 ${name} nudged you`, body: `${t.icon ?? ''} ${t.title}`.trim() }
+          : { title: `${name} finished: ${t.icon ?? ''} ${t.title}`.trim(), body: 'Open HomeManager to say thanks.' }
+      let sent = 0
+      for (const sub of targets as Sub[]) if (await send(sub, message, keys)) sent++
+      return json({ sent })
     }
 
     const { data: subs, error } = await db.from('push_subscriptions').select('*')
