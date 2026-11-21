@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { weekPoints } from './logic'
 import { updateReminder } from './reminders'
 import { setMe, useStore, useToday } from './store'
-import type { Chore } from './types'
+import type { Chore, Task } from './types'
 import { Avatar, tint } from './ui'
 import AddSheet from './screens/AddSheet'
 import Chores from './screens/Chores'
@@ -51,7 +51,7 @@ export default function App() {
     setTabState(t)
     window.scrollTo(0, 0)
   }
-  const [sheet, setSheet] = useState<{ chore?: Chore } | null>(null)
+  const [sheet, setSheet] = useState<{ chore?: Chore; task?: Task } | null>(null)
   const [burst, setBurst] = useState<{ key: number; points: number } | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -98,7 +98,7 @@ export default function App() {
       </header>
 
       <main>
-        {tab === 'today' && <Today state={state} me={current} today={today} onDone={celebrate} />}
+        {tab === 'today' && <Today state={state} me={current} today={today} onDone={celebrate} onEdit={(task) => setSheet({ task })} />}
         {tab === 'scores' && <Scoreboard state={state} today={today} />}
         {tab === 'rewards' && <Rewards state={state} me={current} onRedeem={() => celebrate(0)} />}
         {tab === 'chores' && <Chores state={state} me={current} today={today} onEdit={(chore) => setSheet({ chore })} />}
@@ -116,7 +116,7 @@ export default function App() {
         ))}
       </nav>
 
-      {sheet && <AddSheet state={state} chore={sheet.chore} onClose={() => setSheet(null)} />}
+      {sheet && <AddSheet state={state} chore={sheet.chore} task={sheet.task} onClose={() => setSheet(null)} />}
       {burst && <Burst key={burst.key} points={burst.points} />}
     </div>
   )

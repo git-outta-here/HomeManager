@@ -96,6 +96,8 @@ function occurrence(c: Chore, members: Member[], due: string, prev?: string | nu
     points: c.points,
     due,
     assigneeId: assigneeFor(c.assignment, members, prev),
+    note: c.note,
+    steps: c.steps?.map((text) => ({ text })),
   }
 }
 
@@ -193,6 +195,9 @@ export function updateChore(choreId: string, input: ChoreInput) {
               title: chore.title,
               icon: chore.icon,
               points: chore.points,
+              note: chore.note,
+              // Steps that are already ticked stay ticked if they survive the edit.
+              steps: chore.steps?.map((text) => ({ text, done: t.steps?.find((x) => x.text === text)?.done })),
               due: reschedule ? firstDue(chore.repeat, ymd()) : t.due,
               assigneeId: reassign ? assigneeFor(chore.assignment, s.members, null) : t.assigneeId,
             },
@@ -254,9 +259,25 @@ export function setHoliday(on: boolean) {
 
 // ---- tasks ----
 
-export function addOneOff(input: Pick<Task, 'title' | 'icon' | 'points' | 'due' | 'assigneeId'>) {
+export type OneOffInput = Pick<Task, 'title' | 'icon' | 'points' | 'due' | 'assigneeId' | 'note' | 'steps'>
+
+export function addOneOff(input: OneOffInput) {
   update((s) => ({ ...s, tasks: [...s.tasks, { ...input, id: id() }] }))
 }
+
+export const updateOneOff = (taskId: string, input: OneOffInput) =>
+  update((s) => ({ ...s, tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, ...input } : t)) }))
+
+/** Ticks or unticks one line of a task's checklist. */
+export const toggleStep = (taskId: string, index: number) =>
+  update((s) => ({
+    ...s,
+    tasks: s.tasks.map((t) =>
+      t.id === taskId && t.steps
+        ? { ...t, steps: t.steps.map((x, i) => (i === index ? { text: x.text, done: x.done ? undefined : true } : x)) }
+        : t,
+    ),
+  }))
 
 /** Marks a task done for `memberId` and returns the points awarded. */
 export function completeTask(taskId: string, memberId: string) {

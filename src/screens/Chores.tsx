@@ -82,7 +82,8 @@ export default function Chores({ state, me, today, onEdit }: { state: State; me:
                   {m && <Avatar member={m} small />}
                   <span className="task-text">
                     <span className="task-title">
-                      {t.icon} {t.title}
+                      <span className="emo">{t.icon}</span>
+                      {t.title}
                     </span>
                     <span className="task-meta">
                       {m?.name} ·{' '}

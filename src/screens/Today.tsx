@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { addDays, bonusDay, bounty, diffDays, dueLabel, parseYmd, urgency, ymd } from '../logic'
-import { completeTask, deleteTask, setHoliday, skipTask, toggleThanks, uncompleteTask } from '../store'
+import { completeTask, setHoliday, skipTask, toggleStep, toggleThanks, uncompleteTask } from '../store'
 import type { Member, State, Task } from '../types'
 import { Avatar, Empty, Section, tint } from '../ui'
 
-type Props = { state: State; me: Member; today: string; onDone: (points: number) => void }
+type Props = { state: State; me: Member; today: string; onDone: (points: number) => void; onEdit: (t: Task) => void }
 
-export default function Today({ state, me, today, onDone }: Props) {
+export default function Today({ state, me, today, onDone, onEdit }: Props) {
   const [showAll, setShowAll] = useState(false)
   const holiday = state.household.pausedSince
   const paused = new Set(state.chores.filter((c) => c.paused).map((c) => c.id))
@@ -25,7 +25,7 @@ export default function Today({ state, me, today, onDone }: Props) {
   const doneToday = recent.some((t) => ymd(new Date(t.completedAt!)) === today)
 
   const card = (t: Task) => (
-    <TaskCard key={t.id} task={t} state={state} me={me} today={today} onDone={onDone} />
+    <TaskCard key={t.id} task={t} state={state} me={me} today={today} onDone={onDone} onEdit={onEdit} />
   )
 
   return (
@@ -104,7 +104,8 @@ function ActivityRow({ task: t, state, me, today }: { task: Task; state: State; 
       {doer && <Avatar member={doer} small />}
       <span className="task-text">
         <span className="task-title">
-          {t.icon} {t.title}
+          <span className="emo">{t.icon}</span>
+          {t.title}
         </span>
         <span className="task-meta">
           {mine ? 'You' : (doer?.name ?? 'Someone')} · {dayLabel(day, today)}
@@ -134,10 +135,12 @@ function ActivityRow({ task: t, state, me, today }: { task: Task; state: State; 
   )
 }
 
-function TaskCard({ task: t, state, me, today, onDone }: Props & { task: Task }) {
+function TaskCard({ task: t, state, me, today, onDone, onEdit }: Props & { task: Task }) {
   const [open, setOpen] = useState(false)
   const who = state.members.find((m) => m.id === t.assigneeId)
   const bonus = bounty(t, bonusDay(state.household, today))
+  const steps = t.steps ?? []
+  const ticked = steps.filter((x) => x.done).length
 
   return (
     <div className={`task u-${urgency(t.due, today)}`}>
@@ -155,6 +158,8 @@ function TaskCard({ task: t, state, me, today, onDone }: Props & { task: Task })
             <span className="task-meta">
               {dueLabel(t.due, today)} · {who ? who.name : 'Up for grabs'}
               {t.choreId ? ' · ↻' : ''}
+              {steps.length > 0 && ` · ☑ ${ticked}/${steps.length}`}
+              {t.note && ' · 📝'}
             </span>
           </span>
         </button>
@@ -165,21 +170,34 @@ function TaskCard({ task: t, state, me, today, onDone }: Props & { task: Task })
         </span>
       </div>
       {open && (
-        <div className="task-actions">
-          {bonus > 0 && (
-            <span className="note">
-              {t.points} points + {bonus} overdue bonus
-            </span>
+        <div className="task-more">
+          {t.note && <p className="task-note">{t.note}</p>}
+          {steps.length > 0 && (
+            <div className="steps">
+              {steps.map((x, i) => (
+                <label key={i} className={x.done ? 'step done' : 'step'}>
+                  <input type="checkbox" checked={!!x.done} onChange={() => toggleStep(t.id, i)} />
+                  <span>{x.text}</span>
+                </label>
+              ))}
+            </div>
           )}
-          {t.choreId ? (
-            <button className="ghost" onClick={() => skipTask(t.id)}>
-              Skip this time
-            </button>
-          ) : (
-            <button className="ghost danger" onClick={() => deleteTask(t.id)}>
-              Delete
-            </button>
-          )}
+          <div className="task-actions">
+            {bonus > 0 && (
+              <span className="note">
+                {t.points} points + {bonus} overdue bonus
+              </span>
+            )}
+            {t.choreId ? (
+              <button className="ghost" onClick={() => skipTask(t.id)}>
+                Skip this time
+              </button>
+            ) : (
+              <button className="ghost" onClick={() => onEdit(t)}>
+                Edit
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

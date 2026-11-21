@@ -1,5 +1,5 @@
-import { addDays, balance, dayStreak, diffDays, pointsBetween, weekStart } from '../logic'
-import type { State } from '../types'
+import { addDays, balance, dayStreak, diffDays, fairness, parseYmd, pointsBetween, weekStart } from '../logic'
+import type { Member, State } from '../types'
 import { Avatar, Section, tint } from '../ui'
 
 export default function Scoreboard({ state, today }: { state: State; today: string }) {
@@ -104,6 +104,8 @@ export default function Scoreboard({ state, today }: { state: State; today: stri
         </div>
       </Section>
 
+      <Fairness state={state} today={today} />
+
       {!hideRace && lastTop > 0 && (
         <Section title="Last week">
           <div className="card">
@@ -121,5 +123,65 @@ export default function Scoreboard({ state, today }: { state: State; today: stri
         </Section>
       )}
     </>
+  )
+}
+
+const WEEKS = 6
+
+/** A bar split between the two of you, in proportion to each person's number. */
+function Split({ members, values }: { members: Member[]; values: Record<string, number> }) {
+  const total = members.reduce((n, m) => n + (values[m.id] ?? 0), 0)
+  return (
+    <div className="bar split">
+      {members.map((m) => (
+        <div key={m.id} style={{ ...tint(m), width: `${total ? ((values[m.id] ?? 0) / total) * 100 : 0}%` }} />
+      ))}
+    </div>
+  )
+}
+
+/** Who has done what over the last few weeks, by points and by chore. */
+function Fairness({ state, today }: { state: State; today: string }) {
+  const { byWeek, byChore, totals } = fairness(state, today, WEEKS)
+  const all = state.members.reduce((n, m) => n + (totals[m.id] ?? 0), 0)
+  if (!all) return null
+  const numbers = (values: Record<string, number>) => state.members.map((m) => values[m.id] ?? 0).join(' · ')
+
+  return (
+    <Section title="Who did what">
+      <div className="card">
+        <div className="fair-head">
+          {state.members.map((m) => (
+            <span key={m.id} className="fair-key" style={tint(m)}>
+              <i /> {m.name} {Math.round(((totals[m.id] ?? 0) / all) * 100)}%
+            </span>
+          ))}
+        </div>
+        <p className="note">Share of all points over the last {WEEKS} weeks.</p>
+
+        <h3 className="sub">Points each week</h3>
+        {byWeek.map((w, i) => (
+          <div className="fair-row" key={w.start}>
+            <span className="fair-label">
+              {i === WEEKS - 1 ? 'This week' : parseYmd(w.start).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+            </span>
+            <Split members={state.members} values={w.points} />
+            <span className="fair-num">{numbers(w.points)}</span>
+          </div>
+        ))}
+
+        <h3 className="sub">Times done, by chore</h3>
+        {byChore.slice(0, 8).map((c) => (
+          <div className="fair-row" key={c.title}>
+            <span className="fair-label">
+              <span className="emo">{c.icon}</span>
+              {c.title}
+            </span>
+            <Split members={state.members} values={c.count} />
+            <span className="fair-num">{numbers(c.count)}</span>
+          </div>
+        ))}
+      </div>
+    </Section>
   )
 }
