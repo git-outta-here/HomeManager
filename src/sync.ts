@@ -56,6 +56,19 @@ export async function calendarFeedUrl(who?: string) {
   return `${URL!.replace(/\/$/, '')}/functions/v1/calendar?${q}`
 }
 
+/**
+ * The address a Siri shortcut on this phone calls to add a task or hear today's list, or null
+ * if the server is not set up for it. Unlike the calendar link, this one can add tasks.
+ */
+export async function shortcutUrl(who: string) {
+  if (!sb || !link) return null
+  const { data, error } = await sb.from('households').select('shortcut_token').eq('id', link.id).maybeSingle()
+  const token = (data as { shortcut_token?: string } | null)?.shortcut_token
+  if (error || !token) return null
+  const q = new URLSearchParams({ t: token, who, tz: Intl.DateTimeFormat().resolvedOptions().timeZone })
+  return `${URL!.replace(/\/$/, '')}/functions/v1/shortcut?${q}`
+}
+
 // ---- status, for the settings screen ----
 
 /** off: not configured. unlinked: configured but this device has no household yet. */

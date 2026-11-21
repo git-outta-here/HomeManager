@@ -11,7 +11,7 @@ import {
   useReminderHour,
 } from '../reminders'
 import { resetAll, setHoliday, uncompleteTask, updateHousehold } from '../store'
-import { calendarFeedUrl, createHousehold, disconnect, retrySync, useSync, type SyncStatus } from '../sync'
+import { calendarFeedUrl, createHousehold, shortcutUrl, disconnect, retrySync, useSync, type SyncStatus } from '../sync'
 import type { Chore, Member, State } from '../types'
 import { Avatar, Empty, Section } from '../ui'
 
@@ -173,6 +173,7 @@ export default function Chores({ state, me, today, onEdit }: { state: State; me:
       {linked && <Reminders me={me} partner={state.members.find((m) => m.id !== me.id)} />}
 
       {linked && <CalendarFeed me={me} />}
+      {linked && <Siri me={me} />}
 
       {sync.status !== 'off' && (
         <Section title="Sync">
@@ -342,6 +343,82 @@ function CalendarFeed({ me }: { me: Member }) {
               "Add to calendar" works with Apple Calendar. For Google Calendar, copy the link and use Other calendars, then
               From URL. Calendars refresh on their own schedule, so changes can take a few hours to appear. Anyone with
               the link can see your tasks, so keep it private.
+            </p>
+          </>
+        )}
+      </div>
+    </Section>
+  )
+}
+
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      className="primary small"
+      onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true), () => setCopied(false))}
+    >
+      {copied ? 'Copied' : label}
+    </button>
+  )
+}
+
+/** Links for the iPhone Shortcuts app, so tasks can be added and read out by voice. */
+function Siri({ me }: { me: Member }) {
+  const [url, setUrl] = useState<string | null | undefined>(undefined)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    let current = true
+    void shortcutUrl(me.id).then((u) => current && setUrl(u))
+    return () => {
+      current = false
+    }
+  }, [me.id])
+
+  return (
+    <Section title="Siri">
+      <div className="card form">
+        <p className="plain">Add a task or hear today's list by voice, using the Shortcuts app on your iPhone.</p>
+        {url === undefined ? (
+          <p className="note">Loading…</p>
+        ) : url === null ? (
+          <p className="note">Siri links are not available right now. Check your connection and reopen this tab.</p>
+        ) : !open ? (
+          <button className="link" onClick={() => setOpen(true)}>
+            Show me how to set it up
+          </button>
+        ) : (
+          <>
+            <h3 className="sub">"Add a chore"</h3>
+            <ol className="steps-list">
+              <li>
+                <CopyButton text={url} label="Copy the add link" />
+              </li>
+              <li>In the Shortcuts app tap +, then add the action Ask for Input. Set its question to "What needs doing?".</li>
+              <li>Add the action Get Contents of URL and paste the link into it.</li>
+              <li>
+                Tap the arrow on that action. Set Method to POST and Request Body to JSON. Add a text field with the key{' '}
+                <b>title</b> and choose Ask for Input (or Provided Input) as its value.
+              </li>
+              <li>Add the action Speak Text, or Show Result, so Siri reads the answer back.</li>
+              <li>Name the shortcut "Add a chore". Then say "Hey Siri, add a chore".</li>
+            </ol>
+            <p className="note">
+              You can end with a day or a person, such as "return the shoes on Friday" or "book the dentist tomorrow for
+              me". With no day it is due today, and with no person it is up for grabs.
+            </p>
+
+            <h3 className="sub">"What's on my list"</h3>
+            <ol className="steps-list">
+              <li>
+                <CopyButton text={`${url}&list=1`} label="Copy the list link" />
+              </li>
+              <li>Make a new shortcut with Get Contents of URL and paste the link. Leave Method as GET.</li>
+              <li>Add Speak Text, and name the shortcut "What's on my list".</li>
+            </ol>
+            <p className="note">
+              These links are for {me.name} on this phone, and they can add tasks to your household. Keep them private.
             </p>
           </>
         )}
