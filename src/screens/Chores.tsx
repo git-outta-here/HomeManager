@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { dueLabel, onTimeStreak, repeatLabel, urgency } from '../logic'
 import {
   disableReminders,
@@ -11,7 +11,7 @@ import {
   useReminderHour,
 } from '../reminders'
 import { resetAll, setHoliday, uncompleteTask, updateHousehold } from '../store'
-import { createHousehold, disconnect, retrySync, useSync, type SyncStatus } from '../sync'
+import { calendarFeedUrl, createHousehold, disconnect, retrySync, useSync, type SyncStatus } from '../sync'
 import type { Chore, Member, State } from '../types'
 import { Avatar, Empty, Section } from '../ui'
 
@@ -172,6 +172,8 @@ export default function Chores({ state, me, today, onEdit }: { state: State; me:
 
       {linked && <Reminders me={me} partner={state.members.find((m) => m.id !== me.id)} />}
 
+      {linked && <CalendarFeed me={me} />}
+
       {sync.status !== 'off' && (
         <Section title="Sync">
           <div className="card form">
@@ -287,6 +289,62 @@ function Reminders({ me, partner }: { me: Member; partner?: Member }) {
           </>
         )}
         {note && <p className="note">{note}</p>}
+      </div>
+    </Section>
+  )
+}
+
+/** A private link that shows upcoming tasks in a calendar app. */
+function CalendarFeed({ me }: { me: Member }) {
+  const [mine, setMine] = useState(true)
+  const [url, setUrl] = useState<string | null | undefined>(undefined)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    let current = true
+    setCopied(false)
+    void calendarFeedUrl(mine ? me.id : undefined).then((u) => current && setUrl(u))
+    return () => {
+      current = false
+    }
+  }, [mine, me.id])
+
+  return (
+    <Section title="Calendar">
+      <div className="card form">
+        <p className="plain">See what is coming up in your phone's calendar.</p>
+        <div className="seg">
+          <button type="button" className={mine ? 'on' : ''} onClick={() => setMine(true)}>
+            Just {me.name}'s
+          </button>
+          <button type="button" className={!mine ? 'on' : ''} onClick={() => setMine(false)}>
+            Everyone's
+          </button>
+        </div>
+        {url === undefined ? (
+          <p className="note">Loading…</p>
+        ) : url === null ? (
+          <p className="note">The calendar feed is not available right now. Check your connection and reopen this tab.</p>
+        ) : (
+          <>
+            <div className="row">
+              <a className="primary small" href={url.replace(/^https:/, 'webcal:')}>
+                Add to calendar
+              </a>
+              <button
+                className="ghost"
+                onClick={() => void navigator.clipboard?.writeText(url).then(() => setCopied(true), () => setCopied(false))}
+              >
+                {copied ? 'Copied' : 'Copy link'}
+              </button>
+            </div>
+            <p className="note">
+              "Add to calendar" works with Apple Calendar. For Google Calendar, copy the link and use Other calendars, then
+              From URL. Calendars refresh on their own schedule, so changes can take a few hours to appear. Anyone with
+              the link can see your tasks, so keep it private.
+            </p>
+          </>
+        )}
       </div>
     </Section>
   )

@@ -42,6 +42,20 @@ let channel: RealtimeChannel | null = null
 export const syncClient = () => sb
 export const linkedHousehold = () => link?.id ?? null
 
+/**
+ * The address a calendar app subscribes to for this household's tasks, or null if the server
+ * is not set up for it. `who` limits the feed to one person's tasks plus anything up for grabs.
+ */
+export async function calendarFeedUrl(who?: string) {
+  if (!sb || !link) return null
+  const { data, error } = await sb.from('households').select('calendar_token').eq('id', link.id).maybeSingle()
+  const token = (data as { calendar_token?: string } | null)?.calendar_token
+  if (error || !token) return null
+  const q = new URLSearchParams({ t: token, tz: Intl.DateTimeFormat().resolvedOptions().timeZone })
+  if (who) q.set('who', who)
+  return `${URL!.replace(/\/$/, '')}/functions/v1/calendar?${q}`
+}
+
 // ---- status, for the settings screen ----
 
 /** off: not configured. unlinked: configured but this device has no household yet. */

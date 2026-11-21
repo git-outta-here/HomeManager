@@ -1151,3 +1151,10 @@ fieldset {
 .emo {
   margin-right: 6px;
 }
+
+a.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
